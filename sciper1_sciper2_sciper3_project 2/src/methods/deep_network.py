@@ -13,7 +13,7 @@ class MLP(nn.Module):
     It should not use any convolutional layers.
     """
 
-    def __init__(self, input_size, n_classes, hidden_size):
+    def __init__(self, input_size, n_classes, hidden_size = 512, device='cpu'):
         """
         Initialize the network.
 
@@ -25,11 +25,17 @@ class MLP(nn.Module):
             n_classes (int): number of classes to predict
         """
         super().__init__()
+        self.device = device
         self.model_NN = nn.Sequential(
             nn.Linear(input_size, hidden_size),
             nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size),
+            nn.ReLU(),
             nn.Linear(hidden_size, n_classes),
-            nn.Softmax(dim=1),
         )
 
     def forward(self, x):
@@ -47,7 +53,6 @@ class MLP(nn.Module):
 
         return preds
 
-
 class CNN(nn.Module):
     """
     A CNN which does classification.
@@ -55,7 +60,7 @@ class CNN(nn.Module):
     It should use at least one convolutional layer.
     """
 
-    def __init__(self, input_channels, n_classes):
+    def __init__(self, input_channels, n_classes, device='cpu'):
         """
         Initialize the network.
 
@@ -67,6 +72,7 @@ class CNN(nn.Module):
             n_classes (int): number of classes to predict
         """
         super().__init__()
+        self.device = device
         self.model_CNN = nn.Sequential(
             nn.Conv2d(input_channels, 32, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
@@ -259,7 +265,7 @@ class Trainer(object):
         for batch_idx, (data, targets) in enumerate(dataloader):
             print(f"Batch [{batch_idx+1}/{len(dataloader)}]", end="\r")
 
-            data, targets = data.to(self.model.device), targets.to(self.model.device)
+            data, targets = data.to(self.model.device), targets.to(self.model.device).long()
 
             # Zero the parameter gradients
             self.optimizer.zero_grad()
@@ -324,24 +330,14 @@ class Trainer(object):
         Returns:
             pred_labels (array): target of shape (N,)
         """
-        training_data = training_data.reshape(-1, 1, 28, 28)  # Reshape to (N, 1, 28, 28)
 
-        # example of some data content
-        print("Training data example")
-        print(training_data[0])
-        
         # First, prepare data for pytorch
         train_dataset = TensorDataset(
-            torch.from_numpy(training_data).float().to(self.device), torch.from_numpy(training_labels).long().to(self.device)
+            torch.from_numpy(training_data).float(), torch.from_numpy(training_labels)
         )
         train_dataloader = DataLoader(
             train_dataset, batch_size=self.batch_size, shuffle=True
         )
-
-        print("Training data shape")
-        print(train_dataloader.dataset.tensors[0].shape)
-        print("Training labels shape")
-        print(train_dataloader.dataset.tensors[1].shape)
 
         self.train_all(train_dataloader)
 
@@ -359,7 +355,7 @@ class Trainer(object):
             pred_labels (array): labels of shape (N,)
         """
         # First, prepare data for pytorch
-        test_dataset = TensorDataset(torch.from_numpy(test_data).float())
+        test_dataset = TensorDataset(torch.from_numpy(test_data).float(), torch.zeros(len(test_data))) 
         test_dataloader = DataLoader(
             test_dataset, batch_size=self.batch_size, shuffle=False
         )

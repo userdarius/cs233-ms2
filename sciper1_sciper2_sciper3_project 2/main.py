@@ -48,12 +48,29 @@ def main(args):
     ### WRITE YOUR CODE HERE to do any other data processing
 
     # Move data to MPS device and convert to float32
-    device = torch.device("mps") if torch.backends.mps.is_built() else torch.device("cpu")
+    device = 'cpu'
+    print(f'Using device: {device}')
 
     # Dimensionality reduction (MS2)
+    best_explained_variance = 0
+    best_pca_d = None
     if args.use_pca:
-        print("Using PCA")
-        pca_obj = PCA(d=args.pca_d)
+        print("Evaluating PCA dimensions...")
+        for pca_d in range(535, 540):
+            pca_obj = PCA(d=pca_d)
+            explained_variance = pca_obj.find_principal_components(xtrain)
+            print(f"PCA d = {pca_d}, Explained Variance = {explained_variance:.2f}%")
+            if explained_variance > best_explained_variance:
+                best_explained_variance = explained_variance
+                best_pca_d = pca_d
+
+        print(f"Best PCA dimension: {best_pca_d} with explained variance: {best_explained_variance:.2f}%")
+        pca_obj = PCA(d=best_pca_d)
+        pca_obj.find_principal_components(xtrain)
+        xtrain = pca_obj.reduce_dimension(xtrain)
+        if not args.test:
+            xvalid = pca_obj.reduce_dimension(xvalid)
+        xtest = pca_obj.reduce_dimension(xtest)
         ### WRITE YOUR CODE HERE: use the PCA object to reduce the dimensionality of the data
 
 
@@ -66,16 +83,16 @@ def main(args):
     n_classes = get_n_classes(ytrain)
     print(f"Number of classes: {n_classes}")
     if args.nn_type == "mlp":
-        model = NotImplemented
+        model = MLP(input_size=xtrain.shape[1], n_classes=n_classes, device=args.device)
     elif args.nn_type == "cnn":
-        model = CNN(input_channels=1, n_classes=n_classes)
+        model = CNN(input_channels=1, n_classes=n_classes, device=args.device)
     elif args.nn_type == "transformer":
         model = MyViT(chw=(1, 28, 28), n_patches=16, n_blocks=6, hidden_d=128, n_heads=8, out_d=10, device=device)
 
     summary(model)
 
     # Trainer object
-    method_obj = Trainer(model, lr=args.lr, epochs=args.max_iters, batch_size=256, device=device)
+    method_obj = Trainer(model, lr=args.lr, epochs=args.max_iters, batch_size=args.nn_batch_size, device=device)
 
     ## 4. Train and evaluate the method
     print(f"\nTraining {args.nn_type} model...")
@@ -86,19 +103,26 @@ def main(args):
     preds_train = method_obj.fit(xtrain, ytrain)
 
     # Predict on unseen data
-    preds = method_obj.predict(xtest)
+    # preds = method_obj.predict(xtest)
+    
+    preds_val = method_obj.predict(xvalid)
 
     ## Report results: performance on train and valid/test sets
     acc = accuracy_fn(preds_train, ytrain)
     macrof1 = macrof1_fn(preds_train, ytrain)
     print(f"\nTrain set: accuracy = {acc:.3f}% - F1-score = {macrof1:.6f}")
+    
 
+
+    acc_val = accuracy_fn(preds_val, yvalid)
+    macrof1_val = macrof1_fn(preds_val, yvalid)
+    print(f"Validation set: accuracy = {acc_val:.3f}% - F1-score = {macrof1_val:.6f}")
 
     ## As there are no test dataset labels, check your model accuracy on validation dataset.
     # You can check your model performance on test set by submitting your test set predictions on the AIcrowd competition.
-    acc = accuracy_fn(preds, xtest)
-    macrof1 = macrof1_fn(preds, xtest)
-    print(f"Validation set:  accuracy = {acc:.3f}% - F1-score = {macrof1:.6f}")
+    # acc = accuracy_fn(preds, xtest)
+    # macrof1 = macrof1_fn(preds, xtest)
+    # print(f"Validation set:  accuracy = {acc:.3f}% - F1-score = {macrof1:.6f}")
 
 
     ### WRITE YOUR CODE HERE if you want to add other outputs, visualization, etc.
