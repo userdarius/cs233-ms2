@@ -386,7 +386,7 @@ class Trainer(object):
         for ep in range(self.epochs):
 
             epoch_start_time = time.time()
-            loss = self.train_one_epoch(dataloader, ep)
+            self.train_one_epoch(dataloader, ep)
 
             epoch_end_time = time.time()
 
@@ -489,6 +489,8 @@ class Trainer(object):
         train_dataloader = DataLoader(
             train_dataset, batch_size=self.batch_size, shuffle=True
         )
+
+        self.train_all(train_dataloader)
 
 
         return self.predict(training_data)

@@ -116,7 +116,7 @@ def main(args):
     print(f"Using device: {device}")
 
     # Fit (:=train) the method on the training data
-    preds_train, logs = method_obj.fit(xtrain, ytrain)
+    preds_train = method_obj.fit(xtrain, ytrain)
     # Predict on unseen data
     preds = method_obj.predict(xvalid)
 
