@@ -94,6 +94,61 @@ class CNN(nn.Module):
             nn.Softmax(dim=1),
         )
 
+# AlexNet implementation
+class AlexNet(nn.Module):
+    """ Build your own model.
+    It should take as input images of shape (1, 28, 28).
+    """
+
+    def __init__(self, device = "mps"):
+        """
+        Initialize your model.
+
+        Feel free to add argument if you want to.
+        """
+        super(AlexNet, self).__init__()
+        self.device = device
+        self.feature = nn.Sequential(
+            nn.Conv2d(1, 32, kernel_size=5, stride=1, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(64, 96, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(96, 64, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 32, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=1),
+        )
+        self.classifier = nn.Sequential(
+            nn.Dropout(),
+            nn.Linear(32 * 12 * 12, 2048),
+            nn.ReLU(inplace=True),
+            nn.Dropout(),
+            nn.Linear(2048, 1024),
+            nn.ReLU(inplace=True),
+            nn.Linear(1024, 10),
+
+        )
+
+    def forward(self, x):
+        """
+        Define the forward pass of your model.
+
+        Args:
+        x: torch.Tensor of shape (batch_size, 1, 28, 28)
+
+        Returns:
+        torch.Tensor of shape (batch_size, 10)
+        """
+        x = x.reshape(-1,1,28,28).to(self.device)
+        x = self.feature(x)
+        x = x.view(x.size(0), -1)
+        x = self.classifier(x)
+        return x
+
 
 # RESNET-50 Implementation
 class Bottleneck(nn.Module):

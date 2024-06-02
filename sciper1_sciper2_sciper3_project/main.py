@@ -6,11 +6,10 @@ import matplotlib.pyplot as plt
 import torch
 
 import torch
-from torchvision.models import AlexNet
 
 from src.data import load_data
 from src.methods.pca import PCA
-from src.methods.deep_network import MLP, ResNet, Bottleneck, Trainer, MyViT
+from src.methods.deep_network import MLP, ResNet, Trainer, MyViT, AlexNet
 from src.utils import normalize_fn, append_bias_term, accuracy_fn, macrof1_fn, get_n_classes
 
 
@@ -97,9 +96,9 @@ def main(args):
     n_classes = get_n_classes(ytrain)
     print(f"Number of classes: {n_classes}")
     if args.nn_type == "mlp":
-        model = MLP(input_size=xtrain.shape[1], n_classes=n_classes, device=args.device)
+        model = MLP(input_size=xtrain.shape[1], n_classes=n_classes, device=device)
     elif args.nn_type == "alexnet":
-        model = AlexNet(input_size=xtrain.shape[1])
+        model = AlexNet(device=device)
     elif args.nn_type == "resnet":
         model = ResNet([3, 4, 6, 3], 10, num_channels=1)
     elif args.nn_type == "transformer":
