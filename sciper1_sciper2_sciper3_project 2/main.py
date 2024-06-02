@@ -70,7 +70,7 @@ def main(args):
     elif args.nn_type == "cnn":
         model = CNN(input_channels=1, n_classes=n_classes)
     elif args.nn_type == "transformer":
-        model = MyViT(chw=(1, 28, 28), n_patches=16, n_blocks=6, hidden_d=128, n_heads=8, out_d=10, device=device)
+        model = MyViT(chw=(1, 28, 28), n_patches=16, n_blocks=12, hidden_d=256, n_heads=8, out_d=10, device=device)
 
     summary(model)
 
@@ -86,7 +86,7 @@ def main(args):
     preds_train = method_obj.fit(xtrain, ytrain)
 
     # Predict on unseen data
-    preds = method_obj.predict(xtest)
+    preds = method_obj.predict(xvalid)
 
     ## Report results: performance on train and valid/test sets
     acc = accuracy_fn(preds_train, ytrain)
@@ -96,8 +96,8 @@ def main(args):
 
     ## As there are no test dataset labels, check your model accuracy on validation dataset.
     # You can check your model performance on test set by submitting your test set predictions on the AIcrowd competition.
-    acc = accuracy_fn(preds, xtest)
-    macrof1 = macrof1_fn(preds, xtest)
+    acc = accuracy_fn(preds, yvalid)
+    macrof1 = macrof1_fn(preds, yvalid)
     print(f"Validation set:  accuracy = {acc:.3f}% - F1-score = {macrof1:.6f}")
 
 
@@ -121,8 +121,8 @@ if __name__ == '__main__':
     parser.add_argument('--pca_d', type=int, default=100, help="the number of principal components")
 
 
-    parser.add_argument('--lr', type=float, default=1e-5, help="learning rate for methods with learning rate")
-    parser.add_argument('--max_iters', type=int, default=100, help="max iters for methods which are iterative")
+    parser.add_argument('--lr', type=float, default=3e-4, help="learning rate for methods with learning rate")
+    parser.add_argument('--max_iters', type=int, default=50, help="max iters for methods which are iterative")
     parser.add_argument('--test', action="store_true",
                         help="train on whole training data and evaluate on the test data, otherwise use a validation set")
 
