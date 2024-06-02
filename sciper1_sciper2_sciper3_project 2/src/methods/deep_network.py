@@ -108,34 +108,35 @@ class CNN(nn.Module):
         return preds
 
 
-
 # Helper classes for the ViT
 class PatchEmbedding(nn.Module):
     def __init__(self, chw, n_patches, hidden_d):
         super().__init__()
-        self.ch, self.h, self.w = chw
-        self.patch_size = self.h // int(n_patches**0.5)
-        self.n_patches = (self.h // self.patch_size) * (self.w // self.patch_size)
-        self.linear = nn.Linear(self.ch * self.patch_size * self.patch_size, hidden_d)
+        self.ch, self.h, self.w = chw # channels, height, width
+        self.patch_size = self.h // int(n_patches**0.5) # Assuming square patches
+        self.n_patches = n_patches # Number of patches
+        self.linear = nn.Linear(self.ch * self.patch_size * self.patch_size, hidden_d) # Linear layer to embed patches into hidden_d
 
     def forward(self, x):
         B, C, H, W = x.shape
-        patches = x.unfold(2, self.patch_size, self.patch_size).unfold(
+        patches = x.unfold(2, self.patch_size, self.patch_size).unfold( # Unfold the image into patches
             3, self.patch_size, self.patch_size
         )
-        patches = patches.contiguous().view(B, C, self.n_patches, -1)
-        patches = patches.permute(0, 2, 1, 3).flatten(2)
+        patches = patches.contiguous().view(B, C, self.n_patches, -1)  # Reshape the patches
+        patches = patches.permute(0, 2, 1, 3).flatten(2) 
         embeddings = self.linear(patches)
         return embeddings
 
 
-class PositionalEncoding(nn.Module):
-    def __init__(self, n_patches, hidden_d):
-        super().__init__()
-        self.pos_embedding = nn.Parameter(torch.randn(1, n_patches, hidden_d))
+def positional_encoding(sequence_length, hidden_d, device):
+    position = torch.arange(sequence_length, dtype=torch.float).unsqueeze(1).to(device) # 0, 1, 2, ..., sequence_length
+    div_term = torch.exp(torch.arange(0, hidden_d, 2).float() * (-torch.log(torch.tensor(10000.0)) / hidden_d)).to(device) # 1/10000^(2i/d)
+    
+    pos_embeddings = torch.zeros(sequence_length, hidden_d).to(device)
+    pos_embeddings[:, 0::2] = torch.sin(position * div_term) # add the sin to even indices
+    pos_embeddings[:, 1::2] = torch.cos(position * div_term) # add the cos to odd indices
 
-    def forward(self, x):
-        return x + self.pos_embedding
+    return pos_embeddings.unsqueeze(0)
 
 
 class TransformerBlock(nn.Module):
@@ -151,12 +152,15 @@ class TransformerBlock(nn.Module):
         self.norm2 = nn.LayerNorm(hidden_d)
 
     def forward(self, x):
-        x = x + self.attention(x, x, x)[0]
-        x = self.norm1(x)
-        x = x + self.mlp(x)
-        x = self.norm2(x)
-        return x
+        # pre layer normalization
+        x_norm = self.norm1(x)
+        attn_out, _ = self.attention(x_norm, x_norm, x_norm)
+        x = x + attn_out # Residual connection
 
+        # post layer normalization
+        mlp_out = self.mlp(self.norm2(x))
+        x = x + mlp_out # Residual connection
+        return x
 
 class MyViT(nn.Module):
     """
@@ -170,7 +174,7 @@ class MyViT(nn.Module):
         """
         super().__init__()
         self.patch_embedding = PatchEmbedding(chw, n_patches, hidden_d)
-        self.positional_encoding = PositionalEncoding(n_patches, hidden_d)
+        self.positional_encoding = positional_encoding(n_patches, hidden_d, device)
         self.transformer_blocks = nn.Sequential(
             *[TransformerBlock(hidden_d, n_heads) for _ in range(n_blocks)]
         )
@@ -187,8 +191,9 @@ class MyViT(nn.Module):
             preds (tensor): logits of predictions of shape (N, C)
                 Reminder: logits are value pre-softmax.
         """
+        x = x.to(self.device)
         x = self.patch_embedding(x)
-        x = self.positional_encoding(x)
+        x += self.positional_encoding.to(self.device)
         x = self.transformer_blocks(x)
         x = x.mean(dim=1)  # Global average pooling
         preds = self.fc(x)
@@ -202,7 +207,7 @@ class Trainer(object):
     It will also serve as an interface between numpy and pytorch.
     """
 
-    def __init__(self, model, lr, epochs, batch_size, device):
+    def __init__(self, model, lr, epochs, batch_size, device, gamma=0.9):
         """
         Initialize the trainer object for a given model.
 
@@ -211,6 +216,7 @@ class Trainer(object):
             lr (float): learning rate for the optimizer
             epochs (int): number of epochs of training
             batch_size (int): number of data points in each batch
+            gamma (float): multiplicative factor of learning rate decay
         """
         self.lr = lr
         self.epochs = epochs
@@ -219,7 +225,8 @@ class Trainer(object):
         self.model = model.to(device)
 
         self.criterion = nn.CrossEntropyLoss()
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr) 
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+        self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=gamma)  # Initialize the ExponentialLR scheduler
 
     def train_all(self, dataloader):
         """
@@ -236,19 +243,23 @@ class Trainer(object):
             epoch_start_time = time.time()
             self.train_one_epoch(dataloader, ep)
             epoch_end_time = time.time()
+
+            print("learning rate = ", self.lr)
             
             elapsed_time = epoch_end_time - epoch_start_time
             total_elapsed_time = epoch_end_time - start_time
             epochs_left = self.epochs - (ep + 1)
             estimated_time_left = epochs_left * elapsed_time
 
-            if(ep % 5 == 0):
+            if ep % 5 == 0:
                 self.predict_torch(dataloader)
 
             print(f"Epoch [{ep+1}/{self.epochs}] completed.")
             print(f"Time for this epoch: {elapsed_time:.2f} seconds")
             print(f"Total elapsed time: {total_elapsed_time:.2f} seconds")
             print(f"Estimated time left: {estimated_time_left:.2f} seconds\n")
+
+            self.scheduler.step()  # Step the scheduler
 
     def train_one_epoch(self, dataloader, ep):
         """
@@ -284,7 +295,6 @@ class Trainer(object):
 
             running_loss += loss.item()
             
-
 
         print(f"Epoch [{ep+1}] Loss: {running_loss/len(dataloader):.4f}")
 
@@ -330,7 +340,13 @@ class Trainer(object):
         Returns:
             pred_labels (array): target of shape (N,)
         """
+        training_data = training_data.reshape(-1, 1, 28, 28)  # Reshape to (N, 1, 28, 28)
+        print(training_data.shape)
 
+        training_labels = training_labels.reshape(-1)  # Ensure labels are of shape (N,)
+        print(training_labels.shape)
+
+        
         # First, prepare data for pytorch
         train_dataset = TensorDataset(
             torch.from_numpy(training_data).float(), torch.from_numpy(training_labels)
@@ -354,8 +370,11 @@ class Trainer(object):
         Returns:
             pred_labels (array): labels of shape (N,)
         """
+        test_data = test_data.reshape(-1, 1, 28, 28)  # Reshape to (N, 1, 28, 28)
+
         # First, prepare data for pytorch
-        test_dataset = TensorDataset(torch.from_numpy(test_data).float(), torch.zeros(len(test_data))) 
+        test_dataset = TensorDataset(torch.from_numpy(test_data).float().to(self.device))
+
         test_dataloader = DataLoader(
             test_dataset, batch_size=self.batch_size, shuffle=False
         )
