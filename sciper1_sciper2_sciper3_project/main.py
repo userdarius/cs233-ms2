@@ -125,10 +125,6 @@ def main(args):
     macrof1 = macrof1_fn(preds_train, ytrain)
     print(f"\nTrain set: accuracy = {acc:.3f}% - F1-score = {macrof1:.6f}")
 
-    acc_val = accuracy_fn(preds, yvalid)
-    macrof1_val = macrof1_fn(preds, yvalid)
-    print(f"Validation set: accuracy = {acc_val:.3f}% - F1-score = {macrof1_val:.6f}")
-
     ## As there are no test dataset labels, check your model accuracy on validation dataset.
     # You can check your model performance on test set by submitting your test set predictions on the AIcrowd competition.
     acc = accuracy_fn(preds, yvalid)

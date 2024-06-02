@@ -96,15 +96,13 @@ class CNN(nn.Module):
 
 # AlexNet implementation
 class AlexNet(nn.Module):
-    """ Build your own model.
-    It should take as input images of shape (1, 28, 28).
+    """ 
+    A simplified AlexNet network.
     """
 
     def __init__(self, device = "mps"):
         """
-        Initialize your model.
-
-        Feel free to add argument if you want to.
+        Initialize the network.
         """
         super(AlexNet, self).__init__()
         self.device = device
@@ -135,8 +133,6 @@ class AlexNet(nn.Module):
 
     def forward(self, x):
         """
-        Define the forward pass of your model.
-
         Args:
         x: torch.Tensor of shape (batch_size, 1, 28, 28)
 
@@ -360,6 +356,7 @@ class MyViT(nn.Module):
         x = self.patch_embedding(x)
         x += self.positional_encoding.to(self.device)
         x = self.transformer_blocks(x)
+        x = x.mean(dim=1)  # Aggregate patch embeddings
         preds = self.fc(x)
         return preds
 
