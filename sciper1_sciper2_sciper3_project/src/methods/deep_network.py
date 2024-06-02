@@ -235,18 +235,16 @@ class PatchEmbedding(nn.Module):
     def __init__(self, chw, n_patches, hidden_d):
         super().__init__()
         self.ch, self.h, self.w = chw  # channels, height, width
-        self.patch_size = self.h // int(n_patches ** 0.5)  # Assuming square patches
-        self.n_patches = n_patches  # Number of patches
-        self.linear = nn.Linear(self.ch * self.patch_size * self.patch_size,
-                                hidden_d)  # Linear layer to embed patches into hidden_d
+        self.patch_size = int(self.h // int(n_patches ** 0.5))  # Assuming square patches
+        self.n_patches = (self.h // self.patch_size) * (self.w // self.patch_size)  # Ensure n_patches matches the number of patches
+        self.linear = nn.Linear(self.ch * self.patch_size * self.patch_size, hidden_d)  # Linear layer to embed patches into hidden_d
 
     def forward(self, x):
         B, C, H, W = x.shape
         patches = x.unfold(2, self.patch_size, self.patch_size).unfold(  # Unfold the image into patches
             3, self.patch_size, self.patch_size
         )
-        patches = patches.contiguous().view(B, C, self.n_patches, -1)  # Reshape the patches
-        patches = patches.permute(0, 2, 1, 3).flatten(2)
+        patches = patches.contiguous().view(B, self.n_patches, -1)  # Reshape the patches
         embeddings = self.linear(patches)
         return embeddings
 
@@ -254,8 +252,7 @@ class PatchEmbedding(nn.Module):
 @staticmethod
 def positional_encoding(sequence_length, hidden_d, device):
     position = torch.arange(sequence_length, dtype=torch.float).unsqueeze(1).to(device)  # 0, 1, 2, ..., sequence_length
-    div_term = torch.exp(torch.arange(0, hidden_d, 2).float() * (-torch.log(torch.tensor(10000.0)) / hidden_d)).to(
-        device)  # 1/10000^(2i/d)
+    div_term = torch.exp(torch.arange(0, hidden_d, 2).float() * (-torch.log(torch.tensor(10000.0)) / hidden_d)).to(device)  # 1/10000^(2i/d)
 
     pos_embeddings = torch.zeros(sequence_length, hidden_d).to(device)
     pos_embeddings[:, 0::2] = torch.sin(position * div_term)  # add the sin to even indices
@@ -300,7 +297,8 @@ class MyViT(nn.Module):
         """
         super().__init__()
         self.patch_embedding = PatchEmbedding(chw, n_patches, hidden_d)
-        self.positional_encoding = positional_encoding(n_patches, hidden_d, device)
+        self.n_patches = (chw[1] // (chw[1] // int(n_patches ** 0.5))) * (chw[2] // (chw[2] // int(n_patches ** 0.5)))
+        self.positional_encoding = positional_encoding(self.n_patches, hidden_d, device)
         self.transformer_blocks = nn.Sequential(
             *[TransformerBlock(hidden_d, n_heads) for _ in range(n_blocks)]
         )
