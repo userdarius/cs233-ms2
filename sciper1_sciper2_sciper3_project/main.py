@@ -9,7 +9,7 @@ import torch
 
 from src.data import load_data
 from src.methods.pca import PCA
-from src.methods.deep_network import MLP, ResNet, Trainer, MyViT, AlexNet
+from src.methods.deep_network import MLP, ResNet, Trainer, MyViT, CNN
 from src.utils import normalize_fn, append_bias_term, accuracy_fn, macrof1_fn, get_n_classes
 
 
@@ -98,7 +98,7 @@ def main(args):
     if args.nn_type == "mlp":
         model = MLP(input_size=xtrain.shape[1], n_classes=n_classes, device=device)
     elif args.nn_type == "alexnet":
-        model = AlexNet(device=device)
+        model = CNN(input_channels=1, n_classes=n_classes, device=device)
     elif args.nn_type == "resnet":
         model = ResNet([3, 4, 6, 3], 10, num_channels=1)
     elif args.nn_type == "transformer":

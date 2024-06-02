@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
 from abc import ABCMeta
+from torchsummary import summary
 
 
 ## MS2
@@ -58,58 +59,23 @@ class MLP(nn.Module):
         return preds
 
 
-class CNN(nn.Module):
-    def __init__(
-            self,
-            input_channels: int,
-            n_classes: int,
-            device='cpu'
-    ):
-        """
-        Initialize the network.
-
-        You can add arguments if you want, but WITH a default value, e.g.:
-            __init__(self, input_channels, n_classes, my_arg=32)
-
-        Arguments:
-            input_channels (int): number of channels in the input
-            n_classes (int): number of classes to predict
-        """
-        super().__init__()
-        self.device = device
-        self.model_CNN = nn.Sequential(
-            nn.Conv2d(input_channels, 32, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2),
-            nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2),
-        )
-        self.classifier = nn.Sequential(
-            nn.Linear(32 * 14 * 14, 128),
-            nn.ReLU(),
-            nn.Linear(128, n_classes),
-            nn.ReLU(),
-            nn.Linear(n_classes, n_classes),
-            nn.Softmax(dim=1),
-        )
 
 # AlexNet implementation
-class AlexNet(nn.Module):
-    """ Build your own model.
-    It should take as input images of shape (1, 28, 28).
+class CNN(nn.Module):
+    """
+    Simple implementation of AlexNet
     """
 
-    def __init__(self, device = "mps"):
+    def __init__(self, input_channels, n_classes, device = "cpu"):
         """
         Initialize your model.
 
         Feel free to add argument if you want to.
         """
-        super(AlexNet, self).__init__()
+        super().__init__()
         self.device = device
         self.feature = nn.Sequential(
-            nn.Conv2d(1, 32, kernel_size=5, stride=1, padding=1),
+            nn.Conv2d(in_channels=input_channels, out_channels=32, kernel_size=5, stride=1, padding=1),
             nn.ReLU(inplace=True),
             nn.Conv2d(32, 64, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
@@ -129,7 +95,7 @@ class AlexNet(nn.Module):
             nn.Dropout(),
             nn.Linear(2048, 1024),
             nn.ReLU(inplace=True),
-            nn.Linear(1024, 10),
+            nn.Linear(1024, n_classes),
 
         )
 
@@ -331,7 +297,7 @@ class MyViT(nn.Module):
     A Transformer-based neural network
     """
 
-    def __init__(self, chw, n_patches, n_blocks, hidden_d, n_heads, out_d, device):
+    def __init__(self, chw, n_patches, n_blocks, hidden_d, n_heads, out_d, device="cpu"):
         """
         Initialize the network.
 
@@ -407,7 +373,7 @@ class Trainer(object):
         else:
             self.scheduler = None
 
-    def train_all(self, dataloader) -> dict:
+    def train_all(self, dataloader):
         """
         Fully train the model over the epochs.
 
@@ -418,14 +384,12 @@ class Trainer(object):
             dataloader (DataLoader): dataloader for training data
         """
 
-        logs = {'train_loss': []}
 
         start_time = time.time()
         for ep in range(self.epochs):
 
             epoch_start_time = time.time()
             loss = self.train_one_epoch(dataloader, ep)
-            logs['train_loss'].append(loss)
 
             epoch_end_time = time.time()
 
@@ -444,7 +408,7 @@ class Trainer(object):
             if self.scheduler is not None:
                 self.scheduler.step()  # Step the scheduler
 
-        return logs
+
 
     def train_one_epoch(self, dataloader, ep: int) -> float:
         """
@@ -461,7 +425,7 @@ class Trainer(object):
         for batch_idx, (data, targets) in enumerate(dataloader):
             print(f"Batch [{batch_idx + 1}/{len(dataloader)}]", end="\r")
 
-            data, targets = data.to(self.model.device), targets.to(self.model.device).long()
+            data, targets = data.to(self.device), targets.to(self.device).long()
 
             self.optimizer.zero_grad()
             outputs = self.model(data)
@@ -496,7 +460,7 @@ class Trainer(object):
         pred_labels = []
         with torch.no_grad():
             for data in dataloader:
-                data = data[0].to(self.model.device)  # data[0] to get the input, ignore the target if exists
+                data = data[0].to(self.device)  # data[0] to get the input, ignore the target if exists
                 outputs = self.model(data)
                 _, predicted = torch.max(outputs, 1)
 
@@ -529,9 +493,8 @@ class Trainer(object):
             train_dataset, batch_size=self.batch_size, shuffle=True
         )
 
-        logs = self.train_all(train_dataloader)
 
-        return self.predict(training_data), logs
+        return self.predict(training_data)
 
     def predict(self, test_data):
         """
@@ -556,3 +519,7 @@ class Trainer(object):
 
         # We return the labels after transforming them into numpy array.
         return pred_labels.cpu().numpy()
+
+if __name__ == '__main__':
+    model = ResNet([3,4,6,3], num_classes=10, num_channels=1, device="cpu")
+    summary(model, input_size=(1,28,28))
