@@ -1,5 +1,6 @@
 import numpy as np
 
+
 ## MS2
 
 class PCA(object):
@@ -31,7 +32,9 @@ class PCA(object):
         self.mean and self.W, respectively.
 
         Arguments:            training_data (array): training data of shape (N,D)
-        Returns:            exvar (float): explained variance of the kept dimensions (in percentage, i.e., in [0,100])        """
+        Returns:            exvar (float): explained variance of the kept dimensions (in percentage, i.e., in [0,100])
+        """
+
         training_data: np.ndarray = np.array(training_data)
 
         self.mean = np.mean(training_data, axis=0)
@@ -63,5 +66,3 @@ class PCA(object):
         data_reduced: np.ndarray = np.dot(centered_data, self.W)
 
         return data_reduced
-        
-
