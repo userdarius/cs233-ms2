@@ -112,8 +112,8 @@ def main(args):
     
 
 
-    acc_val = accuracy_fn(preds_val, yvalid)
-    macrof1_val = macrof1_fn(preds_val, yvalid)
+    acc_val = accuracy_fn(preds, yvalid)
+    macrof1_val = macrof1_fn(preds, yvalid)
     print(f"Validation set: accuracy = {acc_val:.3f}% - F1-score = {macrof1_val:.6f}")
 
     ## As there are no test dataset labels, check your model accuracy on validation dataset.
