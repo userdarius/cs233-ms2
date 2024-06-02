@@ -201,7 +201,7 @@ class Trainer(object):
     It will also serve as an interface between numpy and pytorch.
     """
 
-    def __init__(self, model, lr, epochs, batch_size, device):
+    def __init__(self, model, lr, epochs, batch_size, device, gamma=0.9):
         """
         Initialize the trainer object for a given model.
 
@@ -210,6 +210,7 @@ class Trainer(object):
             lr (float): learning rate for the optimizer
             epochs (int): number of epochs of training
             batch_size (int): number of data points in each batch
+            gamma (float): multiplicative factor of learning rate decay
         """
         self.lr = lr
         self.epochs = epochs
@@ -218,7 +219,8 @@ class Trainer(object):
         self.model = model.to(device)
 
         self.criterion = nn.CrossEntropyLoss()
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr) 
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+        self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=gamma)  # Initialize the ExponentialLR scheduler
 
     def train_all(self, dataloader):
         """
@@ -235,19 +237,23 @@ class Trainer(object):
             epoch_start_time = time.time()
             self.train_one_epoch(dataloader, ep)
             epoch_end_time = time.time()
+
+            print("learning rate = ", self.lr)
             
             elapsed_time = epoch_end_time - epoch_start_time
             total_elapsed_time = epoch_end_time - start_time
             epochs_left = self.epochs - (ep + 1)
             estimated_time_left = epochs_left * elapsed_time
 
-            if(ep % 5 == 0):
+            if ep % 5 == 0:
                 self.predict_torch(dataloader)
 
             print(f"Epoch [{ep+1}/{self.epochs}] completed.")
             print(f"Time for this epoch: {elapsed_time:.2f} seconds")
             print(f"Total elapsed time: {total_elapsed_time:.2f} seconds")
             print(f"Estimated time left: {estimated_time_left:.2f} seconds\n")
+
+            self.scheduler.step()  # Step the scheduler
 
     def train_one_epoch(self, dataloader, ep):
         """
@@ -283,7 +289,6 @@ class Trainer(object):
 
             running_loss += loss.item()
             
-
 
         print(f"Epoch [{ep+1}] Loss: {running_loss/len(dataloader):.4f}")
 

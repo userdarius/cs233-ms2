@@ -122,7 +122,7 @@ if __name__ == '__main__':
 
 
     parser.add_argument('--lr', type=float, default=3e-4, help="learning rate for methods with learning rate")
-    parser.add_argument('--max_iters', type=int, default=50, help="max iters for methods which are iterative")
+    parser.add_argument('--max_iters', type=int, default=10, help="max iters for methods which are iterative")
     parser.add_argument('--test', action="store_true",
                         help="train on whole training data and evaluate on the test data, otherwise use a validation set")
 
