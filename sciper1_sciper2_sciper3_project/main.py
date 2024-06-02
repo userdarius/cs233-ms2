@@ -2,14 +2,15 @@ import argparse
 
 import numpy as np
 from torchsummary import summary
-
-
+import matplotlib.pyplot as plt
+import torch
 
 import torch
+from torchvision.models import AlexNet
 
 from src.data import load_data
 from src.methods.pca import PCA
-from src.methods.deep_network import MLP, ResNet, Bottleneck, Trainer
+from src.methods.deep_network import MLP, ResNet, Bottleneck, Trainer, MyViT
 from src.utils import normalize_fn, append_bias_term, accuracy_fn, macrof1_fn, get_n_classes
 
 
@@ -50,14 +51,42 @@ def main(args):
     ### WRITE YOUR CODE HERE to do any other data processing
 
     # Move data to MPS device and convert to float32
-    device = torch.device("mps") if torch.backends.mps.is_built() else torch.device("cpu")
+    device = 'mps' if torch.backends.mps.is_available() else 'cpu'
+    print(f'Using device: {device}')
 
     # Dimensionality reduction (MS2)
+    best_explained_variance = 0
+    best_pca_d = None
     if args.use_pca:
-        print("Using PCA")
-        pca_obj = PCA(d=args.pca_d)
-        ### WRITE YOUR CODE HERE: use the PCA object to reduce the dimensionality of the data
+        print("Evaluating PCA dimensions...")
+        exvar_values = []
+        component_values = range(0, 600)
+        for pca_d in component_values:
+            pca_obj = PCA(d=pca_d)
+            explained_variance = pca_obj.find_principal_components(xtrain)
+            exvar_values.append(explained_variance)
+            print(f"PCA d = {pca_d}, Explained Variance = {explained_variance:.2f}%")
+            if explained_variance > best_explained_variance:
+                best_explained_variance = explained_variance
+                best_pca_d = pca_d
 
+        # Plot the Explained Variance vs. Number of Components
+        plt.figure()
+        plt.plot(component_values, exvar_values)
+        plt.xlabel('Number of Components')
+        plt.ylabel('Explained Variance (%)')
+        plt.title('Explained Variance vs. Number of Components')
+        plt.grid(True)
+        plt.savefig("plots/pca.jpg")
+
+        print(f"Best PCA dimension: {best_pca_d} with explained variance: {best_explained_variance:.2f}%")
+        pca_obj = PCA(d=best_pca_d)
+        pca_obj.find_principal_components(xtrain)
+        xtrain = pca_obj.reduce_dimension(xtrain)
+        if not args.test:
+            xvalid = pca_obj.reduce_dimension(xvalid)
+        xtest = pca_obj.reduce_dimension(xtest)
+        ### WRITE YOUR CODE HERE: use the PCA object to reduce the dimensionality of the data
 
     ## 3. Initialize the method you want to use.
 
@@ -68,23 +97,27 @@ def main(args):
     n_classes = get_n_classes(ytrain)
     print(f"Number of classes: {n_classes}")
     if args.nn_type == "mlp":
-        model = NotImplemented
-    elif args.nn_type == "cnn":
-        model = ResNet(Bottleneck, [3, 4, 6, 3], 10, num_channels=1)
+        model = MLP(input_size=xtrain.shape[1], n_classes=n_classes, device=args.device)
+    elif args.nn_type == "alexnet":
+        model = AlexNet(input_size=xtrain.shape[1])
+    elif args.nn_type == "resnet":
+        model = ResNet([3, 4, 6, 3], 10, num_channels=1)
     elif args.nn_type == "transformer":
-        model = MyViT(chw=(1, 28, 28), n_patches=16, n_blocks=6, hidden_d=128, n_heads=8, out_d=10, device=device)
+        model = MyViT(chw=(1, 28, 28), n_patches=16, n_blocks=12, hidden_d=256, n_heads=8, out_d=10, device=device)
 
     # Trainer object
-    method_obj = Trainer(model, lr=args.lr, epochs=args.max_iters, batch_size=256, device=device)
+    if args.exp_sch:
+        method_obj = Trainer(model, lr=args.lr, epochs=args.max_iters, batch_size=args.nn_batch_size, device=device,
+                            use_exp_lr=True, exp_lr_params={"gamma": args.gamma})
+    else:
+        method_obj = Trainer(model, lr=args.lr, epochs=args.max_iters, batch_size=args.nn_batch_size, device=device)
 
     ## 4. Train and evaluate the method
     print(f"\nTraining {args.nn_type} model...")
     print(f"Using device: {device}")
 
-
     # Fit (:=train) the method on the training data
-    preds_train = method_obj.fit(xtrain, ytrain)
-
+    preds_train, logs = method_obj.fit(xtrain, ytrain)
     # Predict on unseen data
     preds = method_obj.predict(xvalid)
 
@@ -93,13 +126,15 @@ def main(args):
     macrof1 = macrof1_fn(preds_train, ytrain)
     print(f"\nTrain set: accuracy = {acc:.3f}% - F1-score = {macrof1:.6f}")
 
+    acc_val = accuracy_fn(preds, yvalid)
+    macrof1_val = macrof1_fn(preds, yvalid)
+    print(f"Validation set: accuracy = {acc_val:.3f}% - F1-score = {macrof1_val:.6f}")
 
     ## As there are no test dataset labels, check your model accuracy on validation dataset.
     # You can check your model performance on test set by submitting your test set predictions on the AIcrowd competition.
     acc = accuracy_fn(preds, yvalid)
     macrof1 = macrof1_fn(preds, yvalid)
     print(f"Validation set:  accuracy = {acc:.3f}% - F1-score = {macrof1:.6f}")
-
 
     ### WRITE YOUR CODE HERE if you want to add other outputs, visualization, etc.
 
@@ -118,14 +153,14 @@ if __name__ == '__main__':
     parser.add_argument('--device', type=str, default="cpu",
                         help="Device to use for the training, it can be 'cpu' | 'cuda' | 'mps'")
     parser.add_argument('--use_pca', action="store_true", help="use PCA for feature reduction")
+    parser.add_argument('--exp_sch', action="store_true", help="use exponential lr")
+    parser.add_argument('--gamma', type=float, default=0.999)
     parser.add_argument('--pca_d', type=int, default=100, help="the number of principal components")
 
-
-    parser.add_argument('--lr', type=float, default=1e-4, help="learning rate for methods with learning rate")
     parser.add_argument('--max_iters', type=int, default=100, help="max iters for methods which are iterative")
+    parser.add_argument('--lr', type=float, default=3e-4, help="learning rate for methods with learning rate")
     parser.add_argument('--test', action="store_true",
                         help="train on whole training data and evaluate on the test data, otherwise use a validation set")
-
 
     # "args" will keep in memory the arguments and their values,
     # which can be accessed as "args.data", for example.
